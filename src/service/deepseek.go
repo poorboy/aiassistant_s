@@ -160,16 +160,26 @@ func (d *DeepSeekClient) ChatStreamWithTools(messages []DeepSeekMessage, tools [
 }
 
 func mergeOrAppendToolCall(calls *[]DeepSeekToolCall, tc DeepSeekToolCall) {
+	fmt.Printf("[DEBUG] mergeOrAppendToolCall: incoming tc.ID=%s tc.Name=%s tc.Arguments=%s\n", tc.ID, tc.Function.Name, tc.Function.Arguments)
+	
+	// Try to find existing call by ID
 	for i, c := range *calls {
 		if c.ID == tc.ID {
-			if tc.Function.Name != "" {
+			// If we're getting name now, update it
+			if tc.Function.Name != "" && c.Function.Name == "" {
 				(*calls)[i].Function.Name = tc.Function.Name
+				fmt.Printf("[DEBUG] Updated name for ID %s: %s\n", tc.ID, tc.Function.Name)
 			}
+			// Always append arguments
 			(*calls)[i].Function.Arguments += tc.Function.Arguments
+			fmt.Printf("[DEBUG] Merged args for ID %s: total=%s\n", tc.ID, (*calls)[i].Function.Arguments)
 			return
 		}
 	}
+	
+	// If not found, add new call
 	*calls = append(*calls, tc)
+	fmt.Printf("[DEBUG] Added new tool call ID %s name=%s args=%s\n", tc.ID, tc.Function.Name, tc.Function.Arguments)
 }
 
 func (d *DeepSeekClient) TestConnection() error {

@@ -171,6 +171,11 @@ func ChatStream(c echo.Context) error {
 		allMsgs = append(allMsgs, assistantMsg)
 
 		for _, tc := range toolCalls {
+			// Skip if tool name is empty (likely broken stream from DeepSeek)
+			if tc.Function.Name == "" {
+				continue
+			}
+			
 			c.Response().Write([]byte(fmt.Sprintf("event: message\ndata: {\"type\":\"tool_start\",\"tool\":\"%s\",\"args\":%s}\n\n", tc.Function.Name, tc.Function.Arguments)))
 			flusher.Flush()
 
