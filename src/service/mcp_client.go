@@ -555,14 +555,16 @@ func (m *MCPManager) callToolOnClient(id, toolName string, args json.RawMessage)
 
 	var params interface{}
 	if argsStr == "" || argsStr == "null" {
-		params = map[string]interface{}{}
+		params = nil
 	} else {
-		if err := json.Unmarshal(args, &params); err != nil {
+		if argsStr == "{}" {
+			params = map[string]interface{}{}
+		} else if err := json.Unmarshal(args, &params); err != nil {
 			mcpLogger("[MCP] callToolOnClient: unmarshal args failed: %v, raw=%s", err, argsStr)
 			params = map[string]interface{}{}
 		}
 	}
-	mcpLogger("[MCP] callToolOnClient: params type=%T value=%v", params, params)
+	mcpLogger("[MCP] callToolOnClient: final params type=%T value=%v", params, params)
 
 	result, err := session.send("tools/call", map[string]interface{}{
 		"name":      toolName,
