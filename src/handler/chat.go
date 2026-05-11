@@ -141,24 +141,32 @@ func ChatStream(c echo.Context) error {
 	allMsgs = append(allMsgs, service.DeepSeekMessage{Role: "user", Content: message})
 
 	var fullContent strings.Builder
+	var reasoningContent string
 	maxLoops := 10
 	for loop := 0; loop < maxLoops; loop++ {
+		reasoningContent = ""
 		var toolCalls []service.DeepSeekToolCall
 		_, err := client.ChatStreamWithTools(allMsgs, tools, func(chunk string, calls []service.DeepSeekToolCall) {
 			if chunk != "" {
 				fullContent.WriteString(chunk)
-				escaped := strings.ReplaceAll(chunk, "\n", "\\n")
-				c.Response().Write([]byte(fmt.Sprintf("event: message\ndata: {\"type\":\"text\",\"content\":\"%s\"}\n\n", escaped)))
+				textData, _ := json.Marshal(map[string]string{
+					"type":    "text",
+					"content": chunk,
+				})
+				c.Response().Write([]byte(fmt.Sprintf("event: message\ndata: %s\n\n", string(textData))))
 				flusher.Flush()
 			}
 			if len(calls) > 0 {
 				toolCalls = append(toolCalls, calls...)
 			}
-		})
+		}, &reasoningContent)
 
 		if err != nil {
-			errorMsg := strings.ReplaceAll(err.Error(), "\n", "\\n")
-			c.Response().Write([]byte(fmt.Sprintf("event: message\ndata: {\"type\":\"text\",\"content\":\"错误: %s\"}\n\n", errorMsg)))
+			errorData, _ := json.Marshal(map[string]string{
+				"type":    "text",
+				"content": "错误: " + err.Error(),
+			})
+			c.Response().Write([]byte(fmt.Sprintf("event: message\ndata: %s\n\n", string(errorData))))
 			flusher.Flush()
 			break
 		}
@@ -167,7 +175,7 @@ func ChatStream(c echo.Context) error {
 			break
 		}
 
-		assistantMsg := service.DeepSeekMessage{Role: "assistant", Content: fullContent.String(), ToolCalls: toolCalls}
+		assistantMsg := service.DeepSeekMessage{Role: "assistant", Content: fullContent.String(), ToolCalls: toolCalls, ReasoningContent: reasoningContent}
 		allMsgs = append(allMsgs, assistantMsg)
 
 		for _, tc := range toolCalls {
@@ -176,19 +184,32 @@ func ChatStream(c echo.Context) error {
 				continue
 			}
 			
-			c.Response().Write([]byte(fmt.Sprintf("event: message\ndata: {\"type\":\"tool_start\",\"tool\":\"%s\",\"args\":%s}\n\n", tc.Function.Name, tc.Function.Arguments)))
+			// Build tool_start event safely using JSON marshaling to avoid SSE-breaking characters
+			toolStartData, _ := json.Marshal(map[string]interface{}{
+				"type": "tool_start",
+				"tool": tc.Function.Name,
+				"args": tc.Function.Arguments,
+			})
+			c.Response().Write([]byte(fmt.Sprintf("event: message\ndata: %s\n\n", string(toolStartData))))
 			flusher.Flush()
 
 			result := mcpManager.CallToolByName(tc.Function.Name, tc.Function.Arguments, toolNameToConn)
-			resultJSON, _ := json.Marshal(result)
+			// Extract text from MCP tool result
+			toolResultContent := extractMCPResultText(result)
+			resultJSON, _ := json.Marshal(toolResultContent)
 			allMsgs = append(allMsgs, service.DeepSeekMessage{
 				Role:       "tool",
 				ToolCallID: tc.ID,
 				Content:    string(resultJSON),
 			})
 
-			resultStr := fmt.Sprintf("%v", result)
-			c.Response().Write([]byte(fmt.Sprintf("event: message\ndata: {\"type\":\"tool_result\",\"tool\":\"%s\",\"message\":\"%s\"}\n\n", tc.Function.Name, strings.ReplaceAll(resultStr, "\"", "\\\""))))
+			// Build tool_result event safely: use json.Marshal for the message field
+			toolResultData, _ := json.Marshal(map[string]interface{}{
+				"type":    "tool_result",
+				"tool":    tc.Function.Name,
+				"message": toolResultContent,
+			})
+			c.Response().Write([]byte(fmt.Sprintf("event: message\ndata: %s\n\n", string(toolResultData))))
 			flusher.Flush()
 		}
 		fullContent.Reset()
@@ -199,6 +220,11 @@ func ChatStream(c echo.Context) error {
 		assistantID, conversationID, fullContent.String())
 	autoUpdateConversationTitle(conversationID, fullContent.String())
 
+	// Compute and update token count from all messages in this conversation
+	tokenCount := computeConversationTokens(conversationID)
+	database.DB.Exec("UPDATE conversations SET token_count=?, prompt_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+		tokenCount, promptID, conversationID)
+
 	c.Response().Write([]byte("event: message\ndata: {\"type\":\"done\",\"message\":\"done\"}\n\n"))
 	flusher.Flush()
 	return nil
@@ -208,6 +234,43 @@ type chatSettings struct {
 	apiKey  string
 	baseURL string
 	model   string
+}
+
+// extractMCPResultText extracts human-readable text from an MCP tool result.
+// MCP results have format: {"content":[{"type":"text","text":"..."}]}
+// If the content structure is recognized, combine all text items.
+// Otherwise return the JSON representation of the full result.
+func extractMCPResultText(result map[string]interface{}) string {
+	if result == nil {
+		return ""
+	}
+	// Try to extract from MCP content array format
+	if content, ok := result["content"]; ok {
+		if contentArr, ok := content.([]interface{}); ok && len(contentArr) > 0 {
+			var texts []string
+			for _, item := range contentArr {
+				if itemMap, ok := item.(map[string]interface{}); ok {
+					if itemMap["type"] == "text" {
+						if txt, ok := itemMap["text"].(string); ok {
+							texts = append(texts, txt)
+						}
+					}
+				}
+			}
+			if len(texts) > 0 {
+				return strings.Join(texts, "\n")
+			}
+		}
+	}
+	// If error field present, return error message
+	if errMsg, ok := result["error"]; ok {
+		if errStr, ok := errMsg.(string); ok {
+			return errStr
+		}
+	}
+	// Fallback: JSON marshal the result
+	b, _ := json.Marshal(result)
+	return string(b)
 }
 
 func loadChatSettings() chatSettings {
@@ -258,9 +321,41 @@ func loadConversationHistory(conversationID string) []service.DeepSeekMessage {
 	return msgs
 }
 
+// estimateTokens approximates token count from text length.
+// 1 token ≈ 4 ASCII chars or ≈ 1.5 CJK chars.
+func estimateTokens(text string) int {
+	if text == "" {
+		return 0
+	}
+	cjk, ascii := 0, 0
+	for _, r := range text {
+		if r >= 0x4E00 && r <= 0x9FFF || r >= 0x3040 && r <= 0x30FF || r >= 0xAC00 && r <= 0xD7AF {
+			cjk++
+		} else {
+			ascii++
+		}
+	}
+	return (cjk*2 + ascii/2) / 3 // ceil(cjk/1.5 + ascii/4)
+}
+
+func computeConversationTokens(conversationID string) int {
+	rows, err := database.DB.Query("SELECT role, content FROM chat_history WHERE conversation_id=?", conversationID)
+	if err != nil {
+		return 0
+	}
+	defer rows.Close()
+	total := 0
+	for rows.Next() {
+		var role, content string
+		rows.Scan(&role, &content)
+		total += estimateTokens(content)
+	}
+	return total
+}
+
 func ListConversations(c echo.Context) error {
 	rows, err := database.DB.Query(
-		"SELECT id, title, message_count, created_at, updated_at FROM conversations ORDER BY updated_at DESC",
+		"SELECT id, title, message_count, token_count, prompt_id, created_at, updated_at FROM conversations ORDER BY updated_at DESC",
 	)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -271,13 +366,15 @@ func ListConversations(c echo.Context) error {
 		ID           string `json:"id"`
 		Title        string `json:"title"`
 		MessageCount int    `json:"message_count"`
+		TokenCount   int    `json:"token_count"`
+		PromptID     string `json:"prompt_id"`
 		CreatedAt    string `json:"created_at"`
 		UpdatedAt    string `json:"updated_at"`
 	}
 	var convs []Conv
 	for rows.Next() {
 		var cv Conv
-		if err := rows.Scan(&cv.ID, &cv.Title, &cv.MessageCount, &cv.CreatedAt, &cv.UpdatedAt); err != nil {
+		if err := rows.Scan(&cv.ID, &cv.Title, &cv.MessageCount, &cv.TokenCount, &cv.PromptID, &cv.CreatedAt, &cv.UpdatedAt); err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		}
 		convs = append(convs, cv)
@@ -286,31 +383,43 @@ func ListConversations(c echo.Context) error {
 }
 
 func CreateConversation(c echo.Context) error {
+	var body struct {
+		Title    string `json:"title"`
+		PromptID string `json:"prompt_id"`
+	}
+	c.Bind(&body)
+	title := body.Title
+	if title == "" {
+		title = "新会话"
+	}
+	promptID := body.PromptID
 	_, err := database.DB.Exec(
-		"INSERT INTO conversations (id, title) VALUES (hex(randomblob(16)), '新会话')",
+		"INSERT INTO conversations (id, title, prompt_id) VALUES (hex(randomblob(16)), ?, ?)",
+		title, promptID,
 	)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
-	var id, title string
-	database.DB.QueryRow("SELECT id, title FROM conversations ORDER BY created_at DESC LIMIT 1").Scan(&id, &title)
-	return c.JSON(http.StatusOK, map[string]string{"id": id, "title": title})
+	var id, titleRet, promptIDRet string
+	var tokenCount int
+	database.DB.QueryRow("SELECT id, title, token_count, prompt_id FROM conversations ORDER BY created_at DESC LIMIT 1").Scan(&id, &titleRet, &tokenCount, &promptIDRet)
+	return c.JSON(http.StatusOK, map[string]interface{}{"id": id, "title": titleRet, "token_count": tokenCount, "prompt_id": promptIDRet})
 }
 
 func UpdateConversation(c echo.Context) error {
 	id := c.Param("id")
 	var body struct {
-		Title string `json:"title"`
+		Title    string `json:"title"`
+		PromptID string `json:"prompt_id"`
 	}
 	if err := c.Bind(&body); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid body"})
 	}
-	if body.Title == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "title required"})
+	if body.Title != "" {
+		database.DB.Exec("UPDATE conversations SET title=?, updated_at=CURRENT_TIMESTAMP WHERE id=?", body.Title, id)
 	}
-	_, err := database.DB.Exec("UPDATE conversations SET title=?, updated_at=CURRENT_TIMESTAMP WHERE id=?", body.Title, id)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	if body.PromptID != "" || c.Request().Method == "PUT" { // allow clearing
+		database.DB.Exec("UPDATE conversations SET prompt_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=?", body.PromptID, id)
 	}
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
