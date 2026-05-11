@@ -28,8 +28,8 @@ type deepseekReq struct {
 }
 
 type DeepSeekTool struct {
-	Type     string          `json:"type"`
-	Function DeepSeekFunc    `json:"function"`
+	Type     string       `json:"type"`
+	Function DeepSeekFunc `json:"function"`
 }
 
 type DeepSeekFunc struct {
@@ -39,15 +39,16 @@ type DeepSeekFunc struct {
 }
 
 type DeepSeekMessage struct {
-	Role       string           `json:"role"`
-	Content    string           `json:"content"`
-	ToolCalls  []DeepSeekToolCall `json:"tool_calls,omitempty"`
-	ToolCallID string           `json:"tool_call_id,omitempty"`
+	Role             string             `json:"role"`
+	Content          string             `json:"content"`
+	ReasoningContent string             `json:"reasoning_content,omitempty"`
+	ToolCalls        []DeepSeekToolCall `json:"tool_calls,omitempty"`
+	ToolCallID       string             `json:"tool_call_id,omitempty"`
 }
 
 type DeepSeekToolCall struct {
-	ID       string          `json:"id"`
-	Type     string          `json:"type"`
+	ID       string           `json:"id"`
+	Type     string           `json:"type"`
 	Function DeepSeekFuncCall `json:"function"`
 }
 
@@ -59,8 +60,9 @@ type DeepSeekFuncCall struct {
 type DeepSeekStreamChunk struct {
 	Choices []struct {
 		Delta struct {
-			Content    string             `json:"content"`
-			ToolCalls  []DeepSeekToolCall `json:"tool_calls,omitempty"`
+			Content          string             `json:"content"`
+			ReasoningContent string             `json:"reasoning_content"`
+			ToolCalls        []DeepSeekToolCall `json:"tool_calls,omitempty"`
 		} `json:"delta"`
 		FinishReason string `json:"finish_reason"`
 	} `json:"choices"`
@@ -160,26 +162,30 @@ func (d *DeepSeekClient) ChatStreamWithTools(messages []DeepSeekMessage, tools [
 }
 
 func mergeOrAppendToolCall(calls *[]DeepSeekToolCall, tc DeepSeekToolCall) {
-	fmt.Printf("[DEBUG] mergeOrAppendToolCall: incoming tc.ID=%s tc.Name=%s tc.Arguments=%s\n", tc.ID, tc.Function.Name, tc.Function.Arguments)
-	
-	// Try to find existing call by ID
-	for i, c := range *calls {
-		if c.ID == tc.ID {
-			// If we're getting name now, update it
-			if tc.Function.Name != "" && c.Function.Name == "" {
-				(*calls)[i].Function.Name = tc.Function.Name
-				fmt.Printf("[DEBUG] Updated name for ID %s: %s\n", tc.ID, tc.Function.Name)
+	// Case 1: Has ID - find existing or add new
+	if tc.ID != "" {
+		for i, c := range *calls {
+			if c.ID == tc.ID {
+				// Update name if provided
+				if tc.Function.Name != "" && c.Function.Name == "" {
+					(*calls)[i].Function.Name = tc.Function.Name
+				}
+				// Append arguments
+				(*calls)[i].Function.Arguments += tc.Function.Arguments
+				return
 			}
-			// Always append arguments
-			(*calls)[i].Function.Arguments += tc.Function.Arguments
-			fmt.Printf("[DEBUG] Merged args for ID %s: total=%s\n", tc.ID, (*calls)[i].Function.Arguments)
-			return
 		}
+		// Not found, add new
+		*calls = append(*calls, tc)
+		return
 	}
-	
-	// If not found, add new call
-	*calls = append(*calls, tc)
-	fmt.Printf("[DEBUG] Added new tool call ID %s name=%s args=%s\n", tc.ID, tc.Function.Name, tc.Function.Arguments)
+
+	// Case 2: No ID but has arguments - append to last call (streaming arguments)
+	if tc.Function.Arguments != "" && len(*calls) > 0 {
+		lastIdx := len(*calls) - 1
+		(*calls)[lastIdx].Function.Arguments += tc.Function.Arguments
+		return
+	}
 }
 
 func (d *DeepSeekClient) TestConnection() error {
