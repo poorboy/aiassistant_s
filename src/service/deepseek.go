@@ -89,10 +89,10 @@ func NewDeepSeekClientFromSettings(apiKey, baseURL, model string) *DeepSeekClien
 func (d *DeepSeekClient) ChatStream(messages []DeepSeekMessage, onChunk func(string)) (string, error) {
 	return d.ChatStreamWithTools(messages, nil, func(chunk string, _ []DeepSeekToolCall) {
 		onChunk(chunk)
-	})
+	}, nil)
 }
 
-func (d *DeepSeekClient) ChatStreamWithTools(messages []DeepSeekMessage, tools []DeepSeekTool, onEvent func(string, []DeepSeekToolCall)) (string, error) {
+func (d *DeepSeekClient) ChatStreamWithTools(messages []DeepSeekMessage, tools []DeepSeekTool, onEvent func(string, []DeepSeekToolCall), reasoningContent *string) (string, error) {
 	body := deepseekReq{
 		Model:       d.model,
 		Messages:    messages,
@@ -146,6 +146,10 @@ func (d *DeepSeekClient) ChatStreamWithTools(messages []DeepSeekMessage, tools [
 			if content != "" {
 				fullContent.WriteString(content)
 				onEvent(content, nil)
+			}
+			// Capture reasoning_content if the pointer is provided
+			if reasoningContent != nil && choice.Delta.ReasoningContent != "" {
+				*reasoningContent += choice.Delta.ReasoningContent
 			}
 			if calls := choice.Delta.ToolCalls; len(calls) > 0 {
 				for _, tc := range calls {
