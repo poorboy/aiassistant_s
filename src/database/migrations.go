@@ -54,6 +54,10 @@ func migrate() error {
 		}
 	}
 
+	// Add new columns for existing databases (safe to run repeatedly)
+	DB.Exec("ALTER TABLE conversations ADD COLUMN token_count INTEGER DEFAULT 0")
+	DB.Exec("ALTER TABLE conversations ADD COLUMN prompt_id TEXT DEFAULT ''")
+
 	if err := seedDefaultSettings(); err != nil {
 		return err
 	}
