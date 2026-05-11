@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -39,6 +40,7 @@ func main() {
 	e.HideBanner = true
 	e.Debug = false
 	e.HidePort = true
+	e.Logger.SetOutput(io.Discard)
 
 	router.Setup(e)
 
