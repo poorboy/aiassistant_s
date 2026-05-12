@@ -1,33 +1,41 @@
-# AI Assistant - Server
+# AI Assistant Backend
 
-Go + Echo 后端服务，提供 AI 聊天 + MCP 协议控制 Blender/GIMP。
+[**中文**](docs/README.zh.md) | [**日本語**](docs/README.ja.md)
 
-## 技术栈
+A Go backend service providing AI chat API with SSE streaming, MCP (Model Context Protocol) bridge management, multi-model configuration, and plugin support for Blender & GIMP.
 
-- Go 1.26
-- Echo v4
-- SQLite3
+## Deployment
 
-## 快速开始
+### Prerequisites
+- Go 1.26+
+- Node.js 22+ (for frontend build)
 
-```bash
-cd server
-go run .
-```
-
-## 构建
+### Build & Run
 
 ```bash
-go build -ldflags "-s -w" -o output.exe .
+# Build backend
+cd gosrc && go build -o ../exe/aiass.exe .
+
+# Build frontend (optional, for standalone deployment)
+cd web && npm install && npm run build
+
+# Run
+cd exe && ./aiass.exe
 ```
 
-## API
+The service starts at `http://localhost:41400`. Default database: `./data/assdata.db`.
 
-| Method   | Path                               | 说明         |
-| -------- | ---------------------------------- | ------------ |
-| GET      | `/health`                          | 健康检查     |
-| GET      | `/api/chat/stream`                 | SSE 流式聊天 |
-| GET/POST | `/api/chat/conversations`          | 会话管理     |
-| GET/PUT  | `/api/settings`                    | 系统设置     |
-| GET      | `/api/mcp/connections`             | MCP 连接列表 |
-| POST     | `/api/mcp/connections/:id/connect` | 连接 MCP     |
+### Packaging (All Platforms)
+
+```bash
+bash scripts/package.sh                      # current platform
+bash scripts/package.sh linux-amd64 darwin-arm64  # specific targets
+```
+
+Output: `publs/aiass-{os}-{arch}.zip` (Windows) or `.tar.gz` (others).
+
+Each package contains:
+- `exe/aiass.exe` — backend binary
+- `exe/static/` — frontend assets
+- `data/mcp_bin/` — MCP binaries for target platform
+- `data/plugin/` — Blender & GIMP plugins
