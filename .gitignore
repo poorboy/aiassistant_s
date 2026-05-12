@@ -3,7 +3,6 @@ data/
 test_log/
 node_modules/
 dist/
-docs/
 mcp_bin/
 scripts/
 test/
