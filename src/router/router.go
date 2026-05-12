@@ -52,6 +52,14 @@ func Setup(e *echo.Echo) {
 		api.GET("/settings", handler.GetSettings)
 		api.PUT("/settings", handler.UpdateSettings)
 
+		modelCfgs := api.Group("/model-configs")
+		modelCfgs.GET("", handler.ListModelConfigs)
+		modelCfgs.POST("", handler.CreateModelConfig)
+		modelCfgs.PUT("/:id", handler.UpdateModelConfig)
+		modelCfgs.DELETE("/:id", handler.DeleteModelConfig)
+		modelCfgs.POST("/:id/activate", handler.SetActiveModelConfig)
+		modelCfgs.POST("/:id/test", handler.TestModelConfig)
+
 		api.GET("/prompts", handler.ListPrompts)
 		api.POST("/prompts", handler.CreatePrompt)
 		api.PUT("/prompts/:id", handler.UpdatePrompt)
