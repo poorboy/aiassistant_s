@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"aiass/src/config"
@@ -79,12 +80,28 @@ func NewDeepSeekClient(cfg *config.Config) *DeepSeekClient {
 }
 
 func NewDeepSeekClientFromSettings(apiKey, baseURL, model, proxyURL string) *DeepSeekClient {
-	return &DeepSeekClient{
+	client := &DeepSeekClient{
 		apiKey:   apiKey,
 		baseURL:  baseURL,
 		model:    model,
 		proxyURL: proxyURL,
-		http:     &http.Client{},
+	}
+	client.http = newHTTPClient(proxyURL)
+	return client
+}
+
+func newHTTPClient(proxyURL string) *http.Client {
+	if proxyURL == "" {
+		return &http.Client{}
+	}
+	proxy, err := url.Parse(proxyURL)
+	if err != nil {
+		return &http.Client{}
+	}
+	return &http.Client{
+		Transport: &http.Transport{
+			Proxy: http.ProxyURL(proxy),
+		},
 	}
 }
 

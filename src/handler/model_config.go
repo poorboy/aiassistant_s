@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
+	"net/url"
 
 	"aiass/src/database"
 	"aiass/src/model"
@@ -116,13 +117,20 @@ func TestModelConfig(c echo.Context) error {
 	id := c.Param("id")
 	var mc model.ModelConfig
 	err := database.DB.QueryRow(
-		"SELECT base_url, api_key, model FROM model_configs WHERE id=?", id,
-	).Scan(&mc.BaseURL, &mc.APIKey, &mc.Model)
+		"SELECT base_url, api_key, model, proxy_url FROM model_configs WHERE id=?", id,
+	).Scan(&mc.BaseURL, &mc.APIKey, &mc.Model, &mc.ProxyURL)
 	if err != nil {
 		return c.JSON(http.StatusNotFound, map[string]string{"status": "error", "message": "model config not found"})
 	}
 	if mc.APIKey == "" {
 		return c.JSON(http.StatusOK, map[string]string{"status": "error", "message": "API Key 未配置"})
+	}
+
+	httpClient := &http.Client{}
+	if mc.ProxyURL != "" {
+		if proxy, err := url.Parse(mc.ProxyURL); err == nil {
+			httpClient.Transport = &http.Transport{Proxy: http.ProxyURL(proxy)}
+		}
 	}
 
 	reqBody, _ := json.Marshal(map[string]interface{}{
@@ -137,7 +145,7 @@ func TestModelConfig(c echo.Context) error {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+mc.APIKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return c.JSON(http.StatusOK, map[string]string{"status": "error", "message": err.Error()})
 	}
