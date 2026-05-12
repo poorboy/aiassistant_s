@@ -2,17 +2,9 @@
 
 [**English**](../README.md) | [**中文**](README.zh.md)
 
-AI Assistant アプリケーションのバックエンドサービス。AI チャット API（SSE ストリーミング）、MCP ブリッジ管理、マルチモデル構成、Blender/GIMP プラグインサポートを提供します。
+Go 製バックエンド。SSE ストリーミング AI チャット、Blender/GIMP MCP ブリッジ、マルチプロバイダーモデル管理、ロールプロンプト、プラグイン展開を提供します。
 
 > **フロントエンドリポジトリ**: [github.com/poorboy/aiassistant_f](https://github.com/poorboy/aiassistant_f)
-
-## 機能
-
-- **AI チャット**: OpenAI API 互換の SSE ストリーミングチャット。MCP ツール呼び出し（Function Calling）に対応。
-- **マルチモデル管理**: 複数のプロバイダーとモデル（DeepSeek, OpenAI, Anthropic, Google 等）を設定可能。各モデルに API キー、ベース URL、プロキシ設定を個別に設定。
-- **MCP ブリッジ**: Blender および GIMP の MCP サービス接続/切断、ツール一覧表示、リアルタイムログ表示。
-- **ロールプロンプト**: システムロールプロンプトの CRUD。AI の動作をカスタマイズ。
-- **プラグインサポート**: Blender アドオンおよび GIMP プラグインスクリプトを内蔵。
 
 ## デプロイ
 

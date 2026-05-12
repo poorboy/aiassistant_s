@@ -2,17 +2,9 @@
 
 [**中文**](docs/README.zh.md) | [**日本語**](docs/README.ja.md)
 
-Backend service for the AI Assistant application. Provides AI chat API with SSE streaming, MCP (Model Context Protocol) bridge management, multi-model configuration, and Blender/GIMP plugin support.
+This Go backend powers the AI Assistant with SSE streaming AI chat, MCP (Model Context Protocol) bridge for Blender & GIMP, multi-model management across providers, system role prompts, and plugin deployment.
 
 > **Frontend repository**: [github.com/poorboy/aiassistant_f](https://github.com/poorboy/aiassistant_f)
-
-## Features
-
-- **AI Chat**: SSE streaming chat compatible with OpenAI API. Supports tool calling (Function Calling) for MCP tools.
-- **Multi-Model Management**: Configure multiple providers and models (DeepSeek, OpenAI, Anthropic, Google, etc.). Each model can have its own API key, base URL, and proxy settings.
-- **MCP Bridge**: Connect/disconnect Blender and GIMP MCP services, list tools, view real-time logs.
-- **Role Prompts**: CRUD for system role prompts to customize AI behavior.
-- **Plugin Support**: Includes Blender addon and GIMP plugin scripts.
 
 ## Deployment
 
