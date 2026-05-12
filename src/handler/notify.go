@@ -128,6 +128,14 @@ func TestWebhook(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Webhook URL 未配置"})
 	}
 
+	keywords := ws.keywords
+	if keywords == "" {
+		keywords = "@pd:,@Msg:,#Tlog:,$TSK:,#MMSG:"
+	}
+	randomKW := pickRandomKeyword(keywords)
+
+	content := fmt.Sprintf("这是一条测试通知，您的 Webhook 配置已生效。\n\n**测试关键词**: %s\n**时间**: %s", randomKW, time.Now().Format("2006-01-02 15:04:05"))
+
 	payload := map[string]interface{}{
 		"msg_type": "interactive",
 		"card": map[string]interface{}{
@@ -135,7 +143,7 @@ func TestWebhook(c echo.Context) error {
 				"title": map[string]string{"tag": "plain_text", "content": "AI Assistant 测试通知"},
 			},
 			"elements": []map[string]interface{}{
-				{"tag": "markdown", "content": "这是一条测试通知，您的 Webhook 配置已生效。\n\n**时间**: " + time.Now().Format("2006-01-02 15:04:05")},
+				{"tag": "markdown", "content": content},
 			},
 		},
 	}
@@ -150,4 +158,21 @@ func TestWebhook(c echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]string{"status": "error", "message": "Webhook 返回状态码: " + http.StatusText(resp.StatusCode)})
 	}
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok", "message": "通知发送成功"})
+}
+
+func pickRandomKeyword(keywords string) string {
+	parts := strings.Split(keywords, ",")
+	for i := range parts {
+		parts[i] = strings.TrimSpace(parts[i])
+	}
+	var valid []string
+	for _, p := range parts {
+		if p != "" {
+			valid = append(valid, p)
+		}
+	}
+	if len(valid) == 0 {
+		return "@pd:"
+	}
+	return valid[time.Now().UnixNano()%int64(len(valid))]
 }
