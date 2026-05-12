@@ -13,10 +13,11 @@ import (
 )
 
 type DeepSeekClient struct {
-	apiKey  string
-	baseURL string
-	model   string
-	http    *http.Client
+	apiKey   string
+	baseURL  string
+	model    string
+	proxyURL string
+	http     *http.Client
 }
 
 type deepseekReq struct {
@@ -77,12 +78,13 @@ func NewDeepSeekClient(cfg *config.Config) *DeepSeekClient {
 	}
 }
 
-func NewDeepSeekClientFromSettings(apiKey, baseURL, model string) *DeepSeekClient {
+func NewDeepSeekClientFromSettings(apiKey, baseURL, model, proxyURL string) *DeepSeekClient {
 	return &DeepSeekClient{
-		apiKey:  apiKey,
-		baseURL: baseURL,
-		model:   model,
-		http:    &http.Client{},
+		apiKey:   apiKey,
+		baseURL:  baseURL,
+		model:    model,
+		proxyURL: proxyURL,
+		http:     &http.Client{},
 	}
 }
 
