@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"aiass/src/database"
 	"aiass/src/model"
@@ -136,19 +137,38 @@ func TestModelConfig(c echo.Context) error {
 		}
 	}
 
-	reqBody, _ := json.Marshal(map[string]interface{}{
-		"model":    mc.Model,
-		"messages": []map[string]string{{"role": "user", "content": "ping"}},
-		"stream":   false,
-	})
-	req, err := http.NewRequest("POST", mc.BaseURL+"/v1/chat/completions", bytes.NewReader(reqBody))
+	isGemini := strings.Contains(mc.BaseURL, "generativelanguage.googleapis.com")
+
+	apiURL := mc.BaseURL
+	var reqBody []byte
+	if isGemini {
+		apiURL = mc.BaseURL + "/v1beta/models/" + mc.Model + ":generateContent"
+		reqBody, _ = json.Marshal(map[string]interface{}{
+			"contents": []map[string]interface{}{
+				{"parts": []map[string]string{{"text": "ping"}}},
+			},
+		})
+	} else {
+		apiURL = mc.BaseURL + "/v1/chat/completions"
+		reqBody, _ = json.Marshal(map[string]interface{}{
+			"model":    mc.Model,
+			"messages": []map[string]string{{"role": "user", "content": "ping"}},
+			"stream":   false,
+		})
+	}
+
+	req, err := http.NewRequest("POST", apiURL, bytes.NewReader(reqBody))
 	if err != nil {
 		return c.JSON(http.StatusOK, map[string]string{"status": "error", "message": err.Error()})
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+mc.APIKey)
+	if isGemini {
+		req.Header.Set("X-goog-api-key", mc.APIKey)
+	} else {
+		req.Header.Set("Authorization", "Bearer "+mc.APIKey)
+	}
 
-	log.Printf("[TestModel] POST %s (model=%s, proxy=%q)", mc.BaseURL+"/v1/chat/completions", mc.Model, mc.ProxyURL)
+	log.Printf("[TestModel] POST %s (model=%s, proxy=%q)", apiURL, mc.Model, mc.ProxyURL)
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return c.JSON(http.StatusOK, map[string]string{"status": "error", "message": err.Error()})
