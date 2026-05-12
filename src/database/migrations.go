@@ -180,6 +180,8 @@ func seedDefaultModelConfigs() error {
 		{"together", "Together AI", "Llama 3.3 70B", "meta-llama/Llama-3.3-70B-Instruct-Turbo", "https://api.together.xyz/v1", "", ""},
 		{"groq", "Groq", "Llama 3.3 70B", "llama-3.3-70b-versatile", "https://api.groq.com/openai/v1", "", ""},
 		{"openrouter", "OpenRouter", "Claude Sonnet", "anthropic/claude-sonnet-4-20250514", "https://openrouter.ai/api/v1", "", ""},
+		{"ollama", "Ollama", "Ollama (本地)", "llama3.2", "http://localhost:11434", "", ""},
+		{"llamacpp", "Llama.cpp", "Llama.cpp (本地)", "ggml-model-q4_k_m", "http://localhost:8080", "", ""},
 	}
 	for _, d := range defaults {
 		_, err := DB.Exec(
