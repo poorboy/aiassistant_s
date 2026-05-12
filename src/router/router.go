@@ -65,6 +65,10 @@ func Setup(e *echo.Echo) {
 		api.PUT("/prompts/:id", handler.UpdatePrompt)
 		api.DELETE("/prompts/:id", handler.DeletePrompt)
 
+		api.GET("/webhook-settings", handler.GetWebhookSettings)
+		api.PUT("/webhook-settings", handler.UpdateWebhookSettings)
+		api.POST("/webhook-test", handler.TestWebhook)
+
 		userPrompt := api.Group("/user-prompts")
 		userPrompt.GET("", handler.ListUserPrompts)
 		userPrompt.POST("", handler.CreateUserPrompt)
