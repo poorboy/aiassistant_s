@@ -64,5 +64,11 @@ func Setup(e *echo.Echo) {
 		api.POST("/prompts", handler.CreatePrompt)
 		api.PUT("/prompts/:id", handler.UpdatePrompt)
 		api.DELETE("/prompts/:id", handler.DeletePrompt)
+
+		userPrompt := api.Group("/user-prompts")
+		userPrompt.GET("", handler.ListUserPrompts)
+		userPrompt.POST("", handler.CreateUserPrompt)
+		userPrompt.PUT("/:id", handler.UpdateUserPrompt)
+		userPrompt.DELETE("/:id", handler.DeleteUserPrompt)
 	}
 }
