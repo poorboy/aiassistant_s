@@ -245,6 +245,10 @@ func ChatStream(c echo.Context) error {
 
 	c.Response().Write([]byte("event: message\ndata: {\"type\":\"done\",\"message\":\"done\"}\n\n"))
 	flusher.Flush()
+
+	// Send webhook notification after task completes
+	go sendWebhookNotification(conversationID, message, fullContent.String())
+
 	return nil
 }
 
