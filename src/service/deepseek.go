@@ -113,27 +113,46 @@ func (d *DeepSeekClient) ChatStream(messages []DeepSeekMessage, onChunk func(str
 }
 
 func (d *DeepSeekClient) ChatStreamWithTools(messages []DeepSeekMessage, tools []DeepSeekTool, onEvent func(string, []DeepSeekToolCall), reasoningContent *string) (string, error) {
-	body := deepseekReq{
-		Model:       d.model,
-		Messages:    messages,
-		Stream:      true,
-		Temperature: 0.7,
-		Tools:       tools,
+	isGemini := strings.Contains(d.baseURL, "generativelanguage.googleapis.com")
+
+	fullURL := d.baseURL
+	if isGemini {
+		fullURL = d.baseURL + "/v1beta/models/" + d.model + ":streamGenerateContent?alt=sse"
+	} else {
+		fullURL = d.baseURL + "/v1/chat/completions"
 	}
 
-	if len(tools) == 0 {
-		body.Tools = nil
+	var reqBody []byte
+	var err error
+
+	if isGemini {
+		geminiBody := buildGeminiRequestBody(messages)
+		reqBody, _ = json.Marshal(geminiBody)
+	} else {
+		body := deepseekReq{
+			Model:       d.model,
+			Messages:    messages,
+			Stream:      true,
+			Temperature: 0.7,
+			Tools:       tools,
+		}
+		if len(tools) == 0 {
+			body.Tools = nil
+		}
+		reqBody, _ = json.Marshal(body)
 	}
 
-	reqBody, _ := json.Marshal(body)
-	fullURL := d.baseURL + "/v1/chat/completions"
-	log.Printf("[DeepSeek] POST %s (model=%s, proxy=%q)", fullURL, d.model, d.proxyURL)
+	log.Printf("[DeepSeek] POST %s (model=%s, proxy=%q, gemini=%v)", fullURL, d.model, d.proxyURL, isGemini)
 	req, err := http.NewRequest("POST", fullURL, bytes.NewReader(reqBody))
 	if err != nil {
 		return "", fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+d.apiKey)
+	if isGemini {
+		req.Header.Set("X-goog-api-key", d.apiKey)
+	} else {
+		req.Header.Set("Authorization", "Bearer "+d.apiKey)
+	}
 
 	resp, err := d.http.Do(req)
 	if err != nil {
@@ -149,6 +168,13 @@ func (d *DeepSeekClient) ChatStreamWithTools(messages []DeepSeekMessage, tools [
 
 	var fullContent strings.Builder
 	var pendingToolCalls []DeepSeekToolCall
+
+	if isGemini {
+		fullContent.WriteString(parseGeminiStream(resp.Body))
+		onEvent(fullContent.String(), nil)
+		return fullContent.String(), nil
+	}
+
 	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -216,18 +242,37 @@ func mergeOrAppendToolCall(calls *[]DeepSeekToolCall, tc DeepSeekToolCall) {
 }
 
 func (d *DeepSeekClient) TestConnection() error {
-	body := deepseekReq{
-		Model:    d.model,
-		Messages: []DeepSeekMessage{{Role: "user", Content: "ping"}},
-		Stream:   false,
+	isGemini := strings.Contains(d.baseURL, "generativelanguage.googleapis.com")
+	var reqBody []byte
+	var fullURL string
+
+	if isGemini {
+		fullURL = d.baseURL + "/v1beta/models/" + d.model + ":generateContent"
+		reqBody, _ = json.Marshal(map[string]interface{}{
+			"contents": []map[string]interface{}{
+				{"parts": []map[string]string{{"text": "ping"}}},
+			},
+		})
+	} else {
+		fullURL = d.baseURL + "/v1/chat/completions"
+		body := deepseekReq{
+			Model:    d.model,
+			Messages: []DeepSeekMessage{{Role: "user", Content: "ping"}},
+			Stream:   false,
+		}
+		reqBody, _ = json.Marshal(body)
 	}
-	reqBody, _ := json.Marshal(body)
-	req, err := http.NewRequest("POST", d.baseURL+"/v1/chat/completions", bytes.NewReader(reqBody))
+
+	req, err := http.NewRequest("POST", fullURL, bytes.NewReader(reqBody))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+d.apiKey)
+	if isGemini {
+		req.Header.Set("X-goog-api-key", d.apiKey)
+	} else {
+		req.Header.Set("Authorization", "Bearer "+d.apiKey)
+	}
 
 	resp, err := d.http.Do(req)
 	if err != nil {
@@ -238,4 +283,79 @@ func (d *DeepSeekClient) TestConnection() error {
 		return fmt.Errorf("api returned %d", resp.StatusCode)
 	}
 	return nil
+}
+
+type geminiContent struct {
+	Role    string        `json:"role,omitempty"`
+	Parts   []geminiPart  `json:"parts"`
+}
+type geminiPart struct {
+	Text string `json:"text"`
+}
+type geminiReq struct {
+	Contents         []geminiContent `json:"contents"`
+	SystemInstruction *geminiContent  `json:"system_instruction,omitempty"`
+}
+
+func buildGeminiRequestBody(messages []DeepSeekMessage) geminiReq {
+	var contents []geminiContent
+	var systemText string
+	for _, m := range messages {
+		if m.Role == "system" {
+			if systemText != "" {
+				systemText += "\n" + m.Content
+			} else {
+				systemText = m.Content
+			}
+			continue
+		}
+		role := "user"
+		if m.Role == "assistant" {
+			role = "model"
+		}
+		contents = append(contents, geminiContent{
+			Role:  role,
+			Parts: []geminiPart{{Text: m.Content}},
+		})
+	}
+	req := geminiReq{Contents: contents}
+	if systemText != "" {
+		req.SystemInstruction = &geminiContent{Parts: []geminiPart{{Text: systemText}}}
+	}
+	return req
+}
+
+type geminiStreamResp struct {
+	Candidates []struct {
+		Content struct {
+			Parts []struct {
+				Text string `json:"text"`
+			} `json:"parts"`
+		} `json:"content"`
+	} `json:"candidates"`
+}
+
+func parseGeminiStream(r io.Reader) string {
+	var full strings.Builder
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		data := strings.TrimPrefix(line, "data: ")
+		if data == "[DONE]" {
+			break
+		}
+		var chunk geminiStreamResp
+		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+			continue
+		}
+		for _, c := range chunk.Candidates {
+			for _, p := range c.Content.Parts {
+				full.WriteString(p.Text)
+			}
+		}
+	}
+	return full.String()
 }
