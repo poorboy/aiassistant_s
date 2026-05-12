@@ -45,3 +45,16 @@ type DeepSeekMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
 }
+
+type ModelConfig struct {
+	ID        string `json:"id"`
+	Provider  string `json:"provider"`
+	Name      string `json:"name"`
+	Model     string `json:"model"`
+	BaseURL   string `json:"base_url"`
+	APIKey    string `json:"api_key"`
+	ProxyURL  string `json:"proxy_url"`
+	IsActive  int    `json:"is_active"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
