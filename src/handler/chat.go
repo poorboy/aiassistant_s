@@ -18,6 +18,7 @@ func ChatStream(c echo.Context) error {
 	conversationID := c.QueryParam("conversation_id")
 	message := c.QueryParam("message")
 	promptID := c.QueryParam("prompt_id")
+	modelConfigID := c.QueryParam("model_config_id")
 	enabledToolsParam := c.QueryParam("enabled_tools")
 
 	if conversationID == "" || message == "" {
@@ -52,6 +53,23 @@ func ChatStream(c echo.Context) error {
 
 	settings := loadChatSettings()
 
+	// If a model_config_id is provided, use its settings instead
+	if modelConfigID != "" {
+		var mc struct {
+			provider, apiKey, baseURL, model, proxyURL string
+		}
+		err := database.DB.QueryRow(
+			"SELECT provider, api_key, base_url, model, proxy_url FROM model_configs WHERE id=?",
+			modelConfigID,
+		).Scan(&mc.provider, &mc.apiKey, &mc.baseURL, &mc.model, &mc.proxyURL)
+		if err == nil && mc.apiKey != "" {
+			settings.apiKey = mc.apiKey
+			settings.baseURL = mc.baseURL
+			settings.model = mc.model
+			settings.proxyURL = mc.proxyURL
+		}
+	}
+
 	c.Response().Header().Set(echo.HeaderContentType, "text/event-stream")
 	c.Response().Header().Set("Cache-Control", "no-cache")
 	c.Response().Header().Set("Connection", "keep-alive")
@@ -69,7 +87,7 @@ func ChatStream(c echo.Context) error {
 		return nil
 	}
 
-	client := service.NewDeepSeekClientFromSettings(settings.apiKey, settings.baseURL, settings.model)
+	client := service.NewDeepSeekClientFromSettings(settings.apiKey, settings.baseURL, settings.model, settings.proxyURL)
 	mcpManager := service.GetMCPManager()
 
 	connIDs := []string{"blender", "gimp"}
@@ -231,9 +249,10 @@ func ChatStream(c echo.Context) error {
 }
 
 type chatSettings struct {
-	apiKey  string
-	baseURL string
-	model   string
+	apiKey   string
+	baseURL  string
+	model    string
+	proxyURL string
 }
 
 // extractMCPResultText extracts human-readable text from an MCP tool result.
@@ -488,7 +507,7 @@ func TestDeepSeek(c echo.Context) error {
 	if settings.apiKey == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"status": "error", "message": "API Key 未配置"})
 	}
-	client := service.NewDeepSeekClientFromSettings(settings.apiKey, settings.baseURL, settings.model)
+	client := service.NewDeepSeekClientFromSettings(settings.apiKey, settings.baseURL, settings.model, settings.proxyURL)
 	if err := client.TestConnection(); err != nil {
 		return c.JSON(http.StatusOK, map[string]string{"status": "error", "message": err.Error()})
 	}
