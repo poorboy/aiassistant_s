@@ -46,6 +46,18 @@ func migrate() error {
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
+		`CREATE TABLE IF NOT EXISTS model_configs (
+			id TEXT PRIMARY KEY,
+			provider TEXT NOT NULL DEFAULT '',
+			name TEXT NOT NULL DEFAULT '',
+			model TEXT NOT NULL DEFAULT '',
+			base_url TEXT NOT NULL DEFAULT '',
+			api_key TEXT NOT NULL DEFAULT '',
+			proxy_url TEXT NOT NULL DEFAULT '',
+			is_active INTEGER DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
 	}
 
 	for _, ddl := range tables {
@@ -67,6 +79,10 @@ func migrate() error {
 	}
 
 	if err := seedDefaultPrompts(); err != nil {
+		return err
+	}
+
+	if err := seedDefaultModelConfigs(); err != nil {
 		return err
 	}
 
@@ -125,6 +141,50 @@ func seedDefaultPrompts() error {
 		}
 	}
 	log.Println("[DB] Default prompts seeded:", len(defaults))
+	return nil
+}
+
+func seedDefaultModelConfigs() error {
+	var count int
+	DB.QueryRow("SELECT COUNT(*) FROM model_configs").Scan(&count)
+	if count > 0 {
+		return nil
+	}
+	defaults := []struct {
+		id, provider, name, model, baseURL, apiKey, proxyURL string
+	}{
+		{"deepseek", "DeepSeek", "DeepSeek Chat", "deepseek-chat", "https://api.deepseek.com", "", ""},
+		{"openai-gpt4o", "OpenAI", "GPT-4o", "gpt-4o", "https://api.openai.com", "", ""},
+		{"openai-gpt4o-mini", "OpenAI", "GPT-4o Mini", "gpt-4o-mini", "https://api.openai.com", "", ""},
+		{"openai-o3", "OpenAI", "o3", "o3", "https://api.openai.com", "", ""},
+		{"anthropic-sonnet", "Anthropic", "Claude Sonnet", "claude-sonnet-4-20250514", "https://api.anthropic.com", "", ""},
+		{"anthropic-haiku", "Anthropic", "Claude Haiku", "claude-haiku-3-5-20250101", "https://api.anthropic.com", "", ""},
+		{"google-gemini", "Google", "Gemini 2.5 Pro", "gemini-2.5-pro", "https://generativelanguage.googleapis.com", "", ""},
+		{"google-gemini-flash", "Google", "Gemini 2.5 Flash", "gemini-2.5-flash", "https://generativelanguage.googleapis.com", "", ""},
+		{"moonshot", "Moonshot", "Moonshot v1", "moonshot-v1-8k", "https://api.moonshot.cn", "", ""},
+		{"zhipu", "智谱", "GLM-4-Plus", "glm-4-plus", "https://open.bigmodel.cn/api/paas/v4", "", ""},
+		{"baidu", "百度", "ERNIE 4.5", "ernie-4.5", "https://aip.baidubce.com", "", ""},
+		{"aliyun", "阿里云", "Qwen Max", "qwen-max", "https://dashscope.aliyuncs.com/compatible-mode/v1", "", ""},
+		{"aliyun-turbo", "阿里云", "Qwen Turbo", "qwen-turbo", "https://dashscope.aliyuncs.com/compatible-mode/v1", "", ""},
+		{"tencent", "腾讯", "混元", "hunyuan", "https://api.hunyuan.cloud.tencent.com/v1", "", ""},
+		{"siliconflow", "SiliconFlow", "DeepSeek V3", "Pro/deepseek-ai/DeepSeek-V3", "https://api.siliconflow.cn/v1", "", ""},
+		{"siliconflow-qwen", "SiliconFlow", "Qwen2.5-72B", "Qwen/Qwen2.5-72B-Instruct", "https://api.siliconflow.cn/v1", "", ""},
+		{"xai", "xAI", "Grok Beta", "grok-beta", "https://api.x.ai/v1", "", ""},
+		{"together", "Together AI", "Llama 3.3 70B", "meta-llama/Llama-3.3-70B-Instruct-Turbo", "https://api.together.xyz/v1", "", ""},
+		{"groq", "Groq", "Llama 3.3 70B", "llama-3.3-70b-versatile", "https://api.groq.com/openai/v1", "", ""},
+		{"openrouter", "OpenRouter", "Claude Sonnet", "anthropic/claude-sonnet-4-20250514", "https://openrouter.ai/api/v1", "", ""},
+	}
+	for _, d := range defaults {
+		_, err := DB.Exec(
+			`INSERT OR IGNORE INTO model_configs (id, provider, name, model, base_url, api_key, proxy_url, is_active)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
+			d.id, d.provider, d.name, d.model, d.baseURL, d.apiKey, d.proxyURL,
+		)
+		if err != nil {
+			return err
+		}
+	}
+	log.Println("[DB] Default model configs seeded:", len(defaults))
 	return nil
 }
 
