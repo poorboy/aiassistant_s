@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -125,7 +126,9 @@ func (d *DeepSeekClient) ChatStreamWithTools(messages []DeepSeekMessage, tools [
 	}
 
 	reqBody, _ := json.Marshal(body)
-	req, err := http.NewRequest("POST", d.baseURL+"/v1/chat/completions", bytes.NewReader(reqBody))
+	fullURL := d.baseURL + "/v1/chat/completions"
+	log.Printf("[DeepSeek] POST %s (model=%s, proxy=%q)", fullURL, d.model, d.proxyURL)
+	req, err := http.NewRequest("POST", fullURL, bytes.NewReader(reqBody))
 	if err != nil {
 		return "", fmt.Errorf("create request: %w", err)
 	}
@@ -140,6 +143,7 @@ func (d *DeepSeekClient) ChatStreamWithTools(messages []DeepSeekMessage, tools [
 
 	if resp.StatusCode != 200 {
 		respBody, _ := io.ReadAll(resp.Body)
+		log.Printf("[DeepSeek] status=%d body=%s", resp.StatusCode, string(respBody))
 		return "", fmt.Errorf("deepseek api error %d: %s", resp.StatusCode, string(respBody))
 	}
 

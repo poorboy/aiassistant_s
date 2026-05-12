@@ -3,6 +3,9 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"net/url"
 
@@ -145,13 +148,16 @@ func TestModelConfig(c echo.Context) error {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+mc.APIKey)
 
+	log.Printf("[TestModel] POST %s (model=%s, proxy=%q)", mc.BaseURL+"/v1/chat/completions", mc.Model, mc.ProxyURL)
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return c.JSON(http.StatusOK, map[string]string{"status": "error", "message": err.Error()})
 	}
 	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
+	log.Printf("[TestModel] status=%d body=%s", resp.StatusCode, string(respBody))
 	if resp.StatusCode != 200 {
-		return c.JSON(http.StatusOK, map[string]string{"status": "error", "message": "API 返回状态码: " + http.StatusText(resp.StatusCode)})
+		return c.JSON(http.StatusOK, map[string]string{"status": "error", "message": fmt.Sprintf("API %d: %s", resp.StatusCode, string(respBody))})
 	}
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok", "message": "连接成功"})
 }
