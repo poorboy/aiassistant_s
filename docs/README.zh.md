@@ -33,20 +33,4 @@ cd aiassistant_f && npm install && npm run build
 # 运行
 cd exe && ./aiass.exe
 ```
-
 服务启动于 `http://localhost:41400`，默认数据库文件 `./data/assdata.db`。
-
-### 全平台打包
-
-```bash
-bash scripts/package.sh                          # 当前平台
-bash scripts/package.sh linux-amd64 darwin-arm64  # 指定目标
-```
-
-输出至 `publs/` 目录：Windows 为 `.zip`（7z），其他平台为 `.tar.gz`。
-
-每个包包含：
-- `exe/aiass.exe` — 后端可执行文件
-- `exe/static/` — 前端静态资源
-- `data/mcp_bin/` — 对应平台的 MCP 二进制
-- `data/plugin/` — Blender 和 GIMP 插件脚本

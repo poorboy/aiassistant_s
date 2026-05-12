@@ -33,20 +33,4 @@ cd aiassistant_f && npm install && npm run build
 # Run
 cd exe && ./aiass.exe
 ```
-
 Service starts at `http://localhost:41400`. Default database: `./data/assdata.db`.
-
-### Packaging (All Platforms)
-
-```bash
-bash scripts/package.sh                          # current platform
-bash scripts/package.sh linux-amd64 darwin-arm64  # specific targets
-```
-
-Output: `publs/aiass-{os}-{arch}.zip` (Windows, uses 7z) or `.tar.gz` (others).
-
-Each package includes:
-- `exe/aiass.exe` — backend binary
-- `exe/static/` — frontend static assets
-- `data/mcp_bin/` — MCP binaries for the target platform
-- `data/plugin/` — Blender addon & GIMP plugin scripts

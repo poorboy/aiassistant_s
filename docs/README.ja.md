@@ -33,20 +33,4 @@ cd aiassistant_f && npm install && npm run build
 # 実行
 cd exe && ./aiass.exe
 ```
-
 サービスは `http://localhost:41400` で起動。デフォルトデータベース: `./data/assdata.db`。
-
-### マルチプラットフォームパッケージ
-
-```bash
-bash scripts/package.sh                          # 現在のプラットフォーム
-bash scripts/package.sh linux-amd64 darwin-arm64  # ターゲット指定
-```
-
-出力先: `publs/` ディレクトリ。Windows は `.zip`（7z）、その他は `.tar.gz`。
-
-各パッケージの内容:
-- `exe/aiass.exe` — バックエンドバイナリ
-- `exe/static/` — フロントエンドアセット
-- `data/mcp_bin/` — 対象プラットフォームの MCP バイナリ
-- `data/plugin/` — Blender および GIMP プラグイン
