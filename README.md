@@ -5,6 +5,8 @@
 This Go backend powers the AI Assistant with SSE streaming AI chat, MCP (Model Context Protocol) bridge for Blender & GIMP, multi-model management across providers, system role prompts, and plugin deployment.
 
 > **Frontend repository**: [github.com/poorboy/aiassistant_f](https://github.com/poorboy/aiassistant_f)
+>
+> **User Manual**: [English](docs/MANUAL.en.md) | [中文](docs/MANUAL.zh.md) | [日本語](docs/MANUAL.ja.md)
 
 ## Deployment
 
