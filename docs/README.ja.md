@@ -5,6 +5,8 @@
 Go 製バックエンド。SSE ストリーミング AI チャット、Blender/GIMP MCP ブリッジ、マルチプロバイダーモデル管理、ロールプロンプト、プラグイン展開を提供します。
 
 > **フロントエンドリポジトリ**: [github.com/poorboy/aiassistant_f](https://github.com/poorboy/aiassistant_f)
+>
+> **ユーザーマニュアル**: [English](MANUAL.en.md) | [中文](MANUAL.zh.md) | [日本語](MANUAL.ja.md)
 
 ## デプロイ
 

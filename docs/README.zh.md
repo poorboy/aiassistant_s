@@ -5,6 +5,8 @@
 Go 语言实现的后端服务，提供 SSE 流式 AI 聊天、Blender/GIMP MCP 桥接、多供应商模型配置管理、角色提示词系统，以及插件部署支持。
 
 > **前端仓库**: [github.com/poorboy/aiassistant_f](https://github.com/poorboy/aiassistant_f)
+>
+> **用户手册**: [English](MANUAL.en.md) | [中文](MANUAL.zh.md) | [日本語](MANUAL.ja.md)
 
 ## 部署
 
