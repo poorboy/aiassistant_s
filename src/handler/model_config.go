@@ -1,17 +1,11 @@
 package handler
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
-	"io"
-	"log"
 	"net/http"
-	"net/url"
-	"strings"
 
 	"aiass/src/database"
 	"aiass/src/model"
+	"aiass/src/service"
 
 	"github.com/labstack/echo/v4"
 )
@@ -130,54 +124,9 @@ func TestModelConfig(c echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]string{"status": "error", "message": "API Key 未配置"})
 	}
 
-	httpClient := &http.Client{}
-	if mc.ProxyURL != "" {
-		if proxy, err := url.Parse(mc.ProxyURL); err == nil {
-			httpClient.Transport = &http.Transport{Proxy: http.ProxyURL(proxy)}
-		}
-	}
-
-	isGemini := strings.Contains(mc.BaseURL, "generativelanguage.googleapis.com")
-
-	apiURL := mc.BaseURL
-	var reqBody []byte
-	if isGemini {
-		apiURL = mc.BaseURL + "/v1beta/models/" + mc.Model + ":generateContent"
-		reqBody, _ = json.Marshal(map[string]interface{}{
-			"contents": []map[string]interface{}{
-				{"parts": []map[string]string{{"text": "ping"}}},
-			},
-		})
-	} else {
-		apiURL = mc.BaseURL + "/v1/chat/completions"
-		reqBody, _ = json.Marshal(map[string]interface{}{
-			"model":    mc.Model,
-			"messages": []map[string]string{{"role": "user", "content": "ping"}},
-			"stream":   false,
-		})
-	}
-
-	req, err := http.NewRequest("POST", apiURL, bytes.NewReader(reqBody))
-	if err != nil {
+	client := service.NewDeepSeekClientFromSettings(mc.APIKey, mc.BaseURL, mc.Model, mc.ProxyURL)
+	if err := client.TestConnection(); err != nil {
 		return c.JSON(http.StatusOK, map[string]string{"status": "error", "message": err.Error()})
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if isGemini {
-		req.Header.Set("X-goog-api-key", mc.APIKey)
-	} else {
-		req.Header.Set("Authorization", "Bearer "+mc.APIKey)
-	}
-
-	log.Printf("[TestModel] POST %s (model=%s, proxy=%q)", apiURL, mc.Model, mc.ProxyURL)
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return c.JSON(http.StatusOK, map[string]string{"status": "error", "message": err.Error()})
-	}
-	defer resp.Body.Close()
-	respBody, _ := io.ReadAll(resp.Body)
-	log.Printf("[TestModel] status=%d body=%s", resp.StatusCode, string(respBody))
-	if resp.StatusCode != 200 {
-		return c.JSON(http.StatusOK, map[string]string{"status": "error", "message": fmt.Sprintf("API %d: %s", resp.StatusCode, string(respBody))})
 	}
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok", "message": "连接成功"})
 }
