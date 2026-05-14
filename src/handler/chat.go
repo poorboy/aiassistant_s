@@ -119,8 +119,8 @@ func ChatStream(c echo.Context) error {
 		}
 	}
 
-	// Build system messages describing available MCP capabilities per connection
-	var systemMsgs []service.DeepSeekMessage
+	// Build a single system message (many models require system to be at index 0 and only one)
+	var systemBuilder strings.Builder
 	if len(tools) > 0 {
 		connTools := map[string][]string{}
 		for name, connID := range toolNameToConn {
@@ -132,16 +132,12 @@ func ChatStream(c echo.Context) error {
 			if !ok || len(names) == 0 {
 				continue
 			}
-			var prompt string
 			switch connID {
 			case "blender":
-				prompt = "你是 Blender 3D 创作助手。你可以调用以下 Blender MCP 工具来执行 3D 建模、场景操作、材质设置、渲染等任务。\n当你接收到 3D 建模、渲染、场景创建、Blender 相关请求时，必须使用这些工具来完成任务，不要只给建议。\n可用工具: " + strings.Join(names, ", ") + "\n根据需要选择合适的工具并调用。如果工具返回的结果不完整，可以继续调用其他工具来完成整个工作流。"
+				systemBuilder.WriteString("你是 Blender 3D 创作助手。你可以调用以下 Blender MCP 工具来执行 3D 建模、场景操作、材质设置、渲染等任务。\n当你接收到 3D 建模、渲染、场景创建、Blender 相关请求时，必须使用这些工具来完成任务，不要只给建议。\n可用工具: " + strings.Join(names, ", ") + "\n根据需要选择合适的工具并调用。如果工具返回的结果不完整，可以继续调用其他工具来完成整个工作流。\n\n")
 			case "gimp":
-				prompt = "你是 GIMP 图像编辑助手。你可以调用以下 GIMP MCP 工具来执行图像处理、绘画、海报设计、图片编辑等任务。\n当你接收到图像处理、绘画、设计海报、图片编辑、GIMP 相关请求时，必须使用这些工具来完成任务，不要只给建议。\n可用工具: " + strings.Join(names, ", ") + "\n根据需要选择合适的工具并调用。如果工具返回的结果不完整，可以继续调用其他工具来完成整个工作流。"
-			default:
-				continue
+				systemBuilder.WriteString("你是 GIMP 图像编辑助手。你可以调用以下 GIMP MCP 工具来执行图像处理、绘画、海报设计、图片编辑等任务。\n当你接收到图像处理、绘画、设计海报、图片编辑、GIMP 相关请求时，必须使用这些工具来完成任务，不要只给建议。\n可用工具: " + strings.Join(names, ", ") + "\n根据需要选择合适的工具并调用。如果工具返回的结果不完整，可以继续调用其他工具来完成整个工作流。\n\n")
 			}
-			systemMsgs = append(systemMsgs, service.DeepSeekMessage{Role: "system", Content: prompt})
 		}
 	}
 
@@ -150,8 +146,13 @@ func ChatStream(c echo.Context) error {
 		var title, content string
 		err := database.DB.QueryRow("SELECT title, content FROM prompts WHERE id=?", promptID).Scan(&title, &content)
 		if err == nil && content != "" {
-			systemMsgs = append(systemMsgs, service.DeepSeekMessage{Role: "system", Content: content})
+			systemBuilder.WriteString(content)
 		}
+	}
+
+	var systemMsgs []service.DeepSeekMessage
+	if systemBuilder.Len() > 0 {
+		systemMsgs = append(systemMsgs, service.DeepSeekMessage{Role: "system", Content: systemBuilder.String()})
 	}
 
 	messages := loadConversationHistory(conversationID)
