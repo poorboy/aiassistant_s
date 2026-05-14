@@ -18,6 +18,8 @@ import (
 
 var mcpLogger = log.Printf
 
+var LogDir string
+
 type mcpRequest struct {
 	JSONRPC string      `json:"jsonrpc"`
 	ID      int         `json:"id"`
@@ -88,7 +90,10 @@ func (m *MCPManager) CreateConnection(config MCPConnConfig) error {
 }
 
 func mcpLogPath(name string) string {
-	logDir := filepath.Join("data", "log")
+	logDir := LogDir
+	if logDir == "" {
+		logDir = filepath.Join("data", "log")
+	}
 	os.MkdirAll(logDir, 0755)
 	return filepath.Join(logDir, fmt.Sprintf("mcp-%s-%s.log", name, time.Now().Format("20060102-150405")))
 }
