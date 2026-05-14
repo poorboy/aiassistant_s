@@ -162,7 +162,10 @@ func CallMCPTool(c echo.Context) error {
 
 func GetMCPLogs(c echo.Context) error {
 	id := c.Param("id")
-	logDir := filepath.Join("data", "log")
+	logDir := service.LogDir
+	if logDir == "" {
+		logDir = filepath.Join("data", "log")
+	}
 	pattern := filepath.Join(logDir, "mcp-"+id+"-*.log")
 	matches, err := filepath.Glob(pattern)
 	if err != nil || len(matches) == 0 {
