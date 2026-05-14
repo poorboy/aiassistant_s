@@ -18,8 +18,12 @@ import (
 )
 
 func main() {
-	os.MkdirAll("./data", 0755)
 	cfg := config.Load()
+
+	os.MkdirAll(cfg.DataDir, 0755)
+	os.MkdirAll(cfg.LogDir, 0755)
+
+	service.InitLogDir()
 
 	if err := database.Init(cfg.DBPath); err != nil {
 		log.Fatalf("Database init failed: %v", err)
@@ -30,7 +34,6 @@ func main() {
 		log.Printf("[Server] MCP manager init warning: %v", err)
 	}
 
-	// Auto-connect all MCP services sequentially
 	go func() {
 		time.Sleep(1 * time.Second)
 		service.AutoConnectAll()
@@ -44,15 +47,13 @@ func main() {
 
 	router.Setup(e)
 
-	e.Static("/assets", "./static/assets")
-	e.Static("/static", "./static")
+	e.Static("/assets", cfg.StaticDir+"/assets")
+	e.Static("/static", cfg.StaticDir)
 
-	// 根路径 → index.html
 	e.GET("/", func(c echo.Context) error {
-		return c.File("./static/index.html")
+		return c.File(cfg.StaticDir + "/index.html")
 	})
 
-	// SPA fallback — 先尝试匹配路由，失败则返回 index.html
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			err := next(c)
@@ -62,7 +63,7 @@ func main() {
 				isAssets := strings.HasPrefix(path, "/assets/")
 				isStatic := strings.HasPrefix(path, "/static/")
 				if !isAPI && !isAssets && !isStatic {
-					return c.File("./static/index.html")
+					return c.File(cfg.StaticDir + "/index.html")
 				}
 			}
 			return err
