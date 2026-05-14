@@ -4,8 +4,14 @@ import (
 	"log"
 	"time"
 
+	"aiass/src/config"
 	"aiass/src/database"
 )
+
+func InitLogDir() {
+	cfg := config.Load()
+	LogDir = cfg.LogDir
+}
 
 var mcpManagerService = Manager
 
